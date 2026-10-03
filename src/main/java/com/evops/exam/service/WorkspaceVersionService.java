@@ -102,6 +102,24 @@ import com.evops.regcond.mapper.RegistrationQualificationMapper;
 import com.evops.regcond.mapper.QualificationCheckItemMapper;
 import com.evops.regcond.mapper.QualificationAppealMapper;
 import com.evops.regcond.mapper.QualificationAppealVersionMapper;
+import com.evops.papercomp.entity.ComposeAttempt;
+import com.evops.papercomp.entity.ComposeBatch;
+import com.evops.papercomp.entity.Material;
+import com.evops.papercomp.entity.MaterialChange;
+import com.evops.papercomp.entity.Paper;
+import com.evops.papercomp.entity.PaperItem;
+import com.evops.papercomp.entity.PaperVoidRecord;
+import com.evops.papercomp.entity.PickAlgorithm;
+import com.evops.papercomp.entity.PickAlgorithmVersion;
+import com.evops.papercomp.mapper.ComposeAttemptMapper;
+import com.evops.papercomp.mapper.ComposeBatchMapper;
+import com.evops.papercomp.mapper.MaterialChangeMapper;
+import com.evops.papercomp.mapper.MaterialMapper;
+import com.evops.papercomp.mapper.PaperItemMapper;
+import com.evops.papercomp.mapper.PaperMapper;
+import com.evops.papercomp.mapper.PaperVoidRecordMapper;
+import com.evops.papercomp.mapper.PickAlgorithmMapper;
+import com.evops.papercomp.mapper.PickAlgorithmVersionMapper;
 import com.evops.exam.mapper.AdmissionTicketMapper;
 import com.evops.exam.mapper.ExamBatchMapper;
 import com.evops.exam.mapper.ExamRoomMapper;
@@ -187,6 +205,15 @@ public class WorkspaceVersionService {
     private final QualificationCheckItemMapper checkItemMapper;
     private final QualificationAppealMapper appealMapper;
     private final QualificationAppealVersionMapper appealVersionMapper;
+    private final MaterialMapper materialMapper;
+    private final MaterialChangeMapper materialChangeMapper;
+    private final PickAlgorithmMapper pickAlgorithmMapper;
+    private final PickAlgorithmVersionMapper pickVersionMapper;
+    private final ComposeBatchMapper composeBatchMapper;
+    private final PaperMapper paperMapper;
+    private final PaperItemMapper paperItemMapper;
+    private final PaperVoidRecordMapper paperVoidRecordMapper;
+    private final ComposeAttemptMapper composeAttemptMapper;
     private final ObjectMapper objectMapper;
     private final RestoreMapper restoreMapper;
 
@@ -244,6 +271,15 @@ public class WorkspaceVersionService {
                                    QualificationCheckItemMapper checkItemMapper,
                                    QualificationAppealMapper appealMapper,
                                    QualificationAppealVersionMapper appealVersionMapper,
+                                   MaterialMapper materialMapper,
+                                   MaterialChangeMapper materialChangeMapper,
+                                   PickAlgorithmMapper pickAlgorithmMapper,
+                                   PickAlgorithmVersionMapper pickVersionMapper,
+                                   ComposeBatchMapper composeBatchMapper,
+                                   PaperMapper paperMapper,
+                                   PaperItemMapper paperItemMapper,
+                                   PaperVoidRecordMapper paperVoidRecordMapper,
+                                   ComposeAttemptMapper composeAttemptMapper,
                                    ObjectMapper objectMapper,
                                    RestoreMapper restoreMapper) {
         this.versionMapper = versionMapper;
@@ -300,6 +336,15 @@ public class WorkspaceVersionService {
         this.checkItemMapper = checkItemMapper;
         this.appealMapper = appealMapper;
         this.appealVersionMapper = appealVersionMapper;
+        this.materialMapper = materialMapper;
+        this.materialChangeMapper = materialChangeMapper;
+        this.pickAlgorithmMapper = pickAlgorithmMapper;
+        this.pickVersionMapper = pickVersionMapper;
+        this.composeBatchMapper = composeBatchMapper;
+        this.paperMapper = paperMapper;
+        this.paperItemMapper = paperItemMapper;
+        this.paperVoidRecordMapper = paperVoidRecordMapper;
+        this.composeAttemptMapper = composeAttemptMapper;
         this.objectMapper = objectMapper;
         this.restoreMapper = restoreMapper;
     }
@@ -462,6 +507,15 @@ public class WorkspaceVersionService {
             data.put("qualificationCheckItems", checkItemMapper.selectList(null));
             data.put("qualificationAppeals", appealMapper.selectList(null));
             data.put("qualificationAppealVersions", appealVersionMapper.selectList(null));
+            data.put("pcMaterials", materialMapper.selectList(null));
+            data.put("pcMaterialChanges", materialChangeMapper.selectList(null));
+            data.put("pcPickAlgorithms", pickAlgorithmMapper.selectList(null));
+            data.put("pcPickVersions", pickVersionMapper.selectList(null));
+            data.put("pcComposeBatches", composeBatchMapper.selectList(null));
+            data.put("pcPapers", paperMapper.selectList(null));
+            data.put("pcPaperItems", paperItemMapper.selectList(null));
+            data.put("pcPaperVoidRecords", paperVoidRecordMapper.selectList(null));
+            data.put("pcComposeAttempts", composeAttemptMapper.selectList(null));
             return objectMapper.writeValueAsString(data);
         } catch (Exception e) {
             throw new BusinessException("SNAPSHOT_FAILED", "生成工作区快照失败：" + e.getMessage());
@@ -479,6 +533,15 @@ public class WorkspaceVersionService {
         // 先清空业务表（版本表本身不动），再按快照原样写回。
         // 用显式带主键的原生 INSERT：准考证、成绩等表的外键依赖原始 id，
         // H2 的 GENERATED BY DEFAULT 允许指定 id 插入。
+        restoreMapper.clearComposeAttempts();
+        restoreMapper.clearPaperVoidRecords();
+        restoreMapper.clearPaperItems();
+        restoreMapper.clearPapers();
+        restoreMapper.clearComposeBatches();
+        restoreMapper.clearPickVersions();
+        restoreMapper.clearPickAlgorithms();
+        restoreMapper.clearMaterialChanges();
+        restoreMapper.clearMaterials();
         restoreMapper.clearCertRevokeRecords();
         restoreMapper.clearCertificates();
         restoreMapper.clearCertSeqs();
@@ -628,6 +691,33 @@ public class WorkspaceVersionService {
         for (QualificationAppealVersion v : nullSafe(data.qualificationAppealVersions)) {
             restoreMapper.insertAppealVersion(v);
         }
+        for (Material m : nullSafe(data.pcMaterials)) {
+            restoreMapper.insertMaterial(m);
+        }
+        for (MaterialChange c : nullSafe(data.pcMaterialChanges)) {
+            restoreMapper.insertMaterialChange(c);
+        }
+        for (PickAlgorithm a : nullSafe(data.pcPickAlgorithms)) {
+            restoreMapper.insertPickAlgorithm(a);
+        }
+        for (PickAlgorithmVersion v : nullSafe(data.pcPickVersions)) {
+            restoreMapper.insertPickVersion(v);
+        }
+        for (ComposeBatch b : nullSafe(data.pcComposeBatches)) {
+            restoreMapper.insertComposeBatch(b);
+        }
+        for (Paper p : nullSafe(data.pcPapers)) {
+            restoreMapper.insertPaper(p);
+        }
+        for (PaperItem i : nullSafe(data.pcPaperItems)) {
+            restoreMapper.insertPaperItem(i);
+        }
+        for (PaperVoidRecord r : nullSafe(data.pcPaperVoidRecords)) {
+            restoreMapper.insertPaperVoidRecord(r);
+        }
+        for (ComposeAttempt a : nullSafe(data.pcComposeAttempts)) {
+            restoreMapper.insertComposeAttempt(a);
+        }
         for (MixAlgorithm a : nullSafe(data.mixAlgorithms)) {
             restoreMapper.insertMixAlgorithm(a);
         }
@@ -742,6 +832,15 @@ public class WorkspaceVersionService {
         restoreMapper.restartVaultBoxMove(restoreMapper.maxVaultBoxMoveId() + 1);
         restoreMapper.restartVaultAccessNote(restoreMapper.maxVaultAccessNoteId() + 1);
         restoreMapper.restartVaultAlert(restoreMapper.maxVaultAlertId() + 1);
+        restoreMapper.restartMaterial(restoreMapper.maxMaterialId() + 1);
+        restoreMapper.restartMaterialChange(restoreMapper.maxMaterialChangeId() + 1);
+        restoreMapper.restartPickAlgorithm(restoreMapper.maxPickAlgorithmId() + 1);
+        restoreMapper.restartPickVersion(restoreMapper.maxPickVersionId() + 1);
+        restoreMapper.restartComposeBatch(restoreMapper.maxComposeBatchId() + 1);
+        restoreMapper.restartPaper(restoreMapper.maxPaperId() + 1);
+        restoreMapper.restartPaperItem(restoreMapper.maxPaperItemId() + 1);
+        restoreMapper.restartPaperVoidRecord(restoreMapper.maxPaperVoidRecordId() + 1);
+        restoreMapper.restartComposeAttempt(restoreMapper.maxComposeAttemptId() + 1);
     }
 
     private <T> List<T> nullSafe(List<T> list) {
@@ -858,5 +957,14 @@ public class WorkspaceVersionService {
         public List<QualificationCheckItem> qualificationCheckItems;
         public List<QualificationAppeal> qualificationAppeals;
         public List<QualificationAppealVersion> qualificationAppealVersions;
+        public List<Material> pcMaterials;
+        public List<MaterialChange> pcMaterialChanges;
+        public List<PickAlgorithm> pcPickAlgorithms;
+        public List<PickAlgorithmVersion> pcPickVersions;
+        public List<ComposeBatch> pcComposeBatches;
+        public List<Paper> pcPapers;
+        public List<PaperItem> pcPaperItems;
+        public List<PaperVoidRecord> pcPaperVoidRecords;
+        public List<ComposeAttempt> pcComposeAttempts;
     }
 }

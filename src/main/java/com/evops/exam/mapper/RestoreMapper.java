@@ -52,6 +52,15 @@ import com.evops.regcond.entity.RegistrationQualification;
 import com.evops.regcond.entity.QualificationCheckItem;
 import com.evops.regcond.entity.QualificationAppeal;
 import com.evops.regcond.entity.QualificationAppealVersion;
+import com.evops.papercomp.entity.ComposeAttempt;
+import com.evops.papercomp.entity.ComposeBatch;
+import com.evops.papercomp.entity.Material;
+import com.evops.papercomp.entity.MaterialChange;
+import com.evops.papercomp.entity.Paper;
+import com.evops.papercomp.entity.PaperItem;
+import com.evops.papercomp.entity.PaperVoidRecord;
+import com.evops.papercomp.entity.PickAlgorithm;
+import com.evops.papercomp.entity.PickAlgorithmVersion;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -932,4 +941,153 @@ public interface RestoreMapper {
 
     @Update("ALTER TABLE t_qualification_appeal_version ALTER COLUMN id RESTART WITH ${value}")
     void restartAppealVersion(@Param("value") long value);
+
+    // ============ papercomp-1：多场并行组卷 ============
+    @Delete("DELETE FROM t_pc_compose_attempt")
+    void clearComposeAttempts();
+
+    @Delete("DELETE FROM t_pc_paper_void_record")
+    void clearPaperVoidRecords();
+
+    @Delete("DELETE FROM t_pc_paper_item")
+    void clearPaperItems();
+
+    @Delete("DELETE FROM t_pc_paper")
+    void clearPapers();
+
+    @Delete("DELETE FROM t_pc_compose_batch")
+    void clearComposeBatches();
+
+    @Delete("DELETE FROM t_pc_pick_algorithm_version")
+    void clearPickVersions();
+
+    @Delete("DELETE FROM t_pc_pick_algorithm")
+    void clearPickAlgorithms();
+
+    @Delete("DELETE FROM t_pc_material_change")
+    void clearMaterialChanges();
+
+    @Delete("DELETE FROM t_pc_material")
+    void clearMaterials();
+
+    @Insert("INSERT INTO t_pc_material (id, code, project_code, knowledge_point, difficulty, question_type, "
+            + "score, stem_digest, status, remark, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{code},#{projectCode},#{knowledgePoint},#{difficulty},#{questionType},"
+            + "#{score},#{stemDigest},#{status},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertMaterial(Material m);
+
+    @Insert("INSERT INTO t_pc_material_change (id, material_id, code, change_type, field_name, old_value, "
+            + "new_value, reason, operator, changed_at, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{materialId},#{code},#{changeType},#{fieldName},#{oldValue},#{newValue},"
+            + "#{reason},#{operator},#{changedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertMaterialChange(MaterialChange c);
+
+    @Insert("INSERT INTO t_pc_pick_algorithm (id, code, name, project_code, remark, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{code},#{name},#{projectCode},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPickAlgorithm(PickAlgorithm a);
+
+    @Insert("INSERT INTO t_pc_pick_algorithm_version (id, algorithm_id, version_no, status, params, remark, "
+            + "published_by, published_at, disabled_by, disabled_at, operator, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{algorithmId},#{versionNo},#{status},#{params},#{remark},"
+            + "#{publishedBy},#{publishedAt},#{disabledBy},#{disabledAt},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPickVersion(PickAlgorithmVersion v);
+
+    @Insert("INSERT INTO t_pc_compose_batch (id, batch_no, project_code, exam_batch_id, paper_count, "
+            + "question_count_per_paper, pick_version_id, pick_version_no, base_seed, quotas, pool_snapshot, "
+            + "pool_snapshot_fingerprint, max_overlap_rate, status, generated_count, max_actual_overlap_rate, "
+            + "warning, operator, remark, composed_at, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchNo},#{projectCode},#{examBatchId},#{paperCount},#{questionCountPerPaper},"
+            + "#{pickVersionId},#{pickVersionNo},#{baseSeed},#{quotas},#{poolSnapshot},"
+            + "#{poolSnapshotFingerprint},#{maxOverlapRate},#{status},#{generatedCount},#{maxActualOverlapRate},"
+            + "#{warning},#{operator},#{remark},#{composedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertComposeBatch(ComposeBatch b);
+
+    @Insert("INSERT INTO t_pc_paper (id, compose_batch_id, batch_no, project_code, paper_index, paper_no, seed, "
+            + "attempt_no, question_count, total_score, max_overlap_rate, fingerprint, pool_snapshot_fingerprint, "
+            + "material_snapshot, status, operator, composed_at, create_by, create_time, update_by, update_time) "
+            + "VALUES (#{id},#{composeBatchId},#{batchNo},#{projectCode},#{paperIndex},#{paperNo},#{seed},"
+            + "#{attemptNo},#{questionCount},#{totalScore},#{maxOverlapRate},#{fingerprint},"
+            + "#{poolSnapshotFingerprint},#{materialSnapshot},#{status},#{operator},#{composedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaper(Paper p);
+
+    @Insert("INSERT INTO t_pc_paper_item (id, paper_id, seq_no, material_id, material_code, knowledge_point, "
+            + "difficulty, question_type, score, stem_digest, create_by, create_time, update_by, update_time) "
+            + "VALUES (#{id},#{paperId},#{seqNo},#{materialId},#{materialCode},#{knowledgePoint},"
+            + "#{difficulty},#{questionType},#{score},#{stemDigest},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperItem(PaperItem i);
+
+    @Insert("INSERT INTO t_pc_paper_void_record (id, paper_id, paper_no, reason, operator, voided_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{paperId},#{paperNo},#{reason},#{operator},#{voidedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperVoidRecord(PaperVoidRecord r);
+
+    @Insert("INSERT INTO t_pc_compose_attempt (id, compose_batch_id, paper_index, attempt_no, seed, picked_codes, "
+            + "overlap_rate, result, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{composeBatchId},#{paperIndex},#{attemptNo},#{seed},#{pickedCodes},"
+            + "#{overlapRate},#{result},#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertComposeAttempt(ComposeAttempt a);
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_material")
+    long maxMaterialId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_material_change")
+    long maxMaterialChangeId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_pick_algorithm")
+    long maxPickAlgorithmId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_pick_algorithm_version")
+    long maxPickVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_compose_batch")
+    long maxComposeBatchId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_paper")
+    long maxPaperId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_paper_item")
+    long maxPaperItemId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_paper_void_record")
+    long maxPaperVoidRecordId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_pc_compose_attempt")
+    long maxComposeAttemptId();
+
+    @Update("ALTER TABLE t_pc_material ALTER COLUMN id RESTART WITH ${value}")
+    void restartMaterial(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_material_change ALTER COLUMN id RESTART WITH ${value}")
+    void restartMaterialChange(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_pick_algorithm ALTER COLUMN id RESTART WITH ${value}")
+    void restartPickAlgorithm(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_pick_algorithm_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartPickVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_compose_batch ALTER COLUMN id RESTART WITH ${value}")
+    void restartComposeBatch(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_paper ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaper(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_paper_item ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperItem(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_paper_void_record ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperVoidRecord(@Param("value") long value);
+
+    @Update("ALTER TABLE t_pc_compose_attempt ALTER COLUMN id RESTART WITH ${value}")
+    void restartComposeAttempt(@Param("value") long value);
 }

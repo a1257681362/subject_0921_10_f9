@@ -369,3 +369,49 @@
 - `GET /api/qualification-appeals?status=&regNo=&personKey=`、`GET /api/qualification-appeals/{id}`、`GET /api/qualification-appeals/{id}/versions`（CREATE/ACCEPT/APPROVE/REJECT 版本链）。
 
 > 新表 `t_condition_rule / t_condition_rule_version / t_registration_qualification / t_qualification_check_item / t_qualification_appeal / t_qualification_appeal_version` 已纳入工作区快照与回退；`t_certificate` 加列 `valid_from/valid_to`（老库平滑加列）；schema 版本号 `regcond-1`。
+
+## 多场并行组卷工作区（papercomp-1）
+
+教研组一次要出多套并行卷，要求难度均衡且互不雷同。在 evops-base 上把组卷做成可追溯闭环：**素材池按知识点×难度档配比随机抽题 → 套间重合率压在阈值内（超阈自动重抽）→ 每套落随机种子与卷面指纹备查 → 抽取过程可复算、事后可验证公平 → 素材池增删留痕且不影响历史卷面**。抽选规则与混编算法、等级规则、证书规则同一套**模块（主表）/ 版本（只追加）/ 状态（当前版本）**三段式。
+
+口径约定：
+- **种子可追溯、抽取可复算**：组卷落基础种子（显式传入或系统按 项目+套数+题量+池指纹+历史批次数 取确定性种子），每套每轮试抽种子由基础种子按固定黄金常数确定性派生；引擎只用 `java.util.Random`、不读时钟，**同算法版本+同素材池快照+同配比+同种子必得同一套卷面**。
+- **公平性验证**：每套卷面存 SHA-256 指纹（绑死算法版本号、池快照指纹、基础/试抽种子、套序号、有序入选题 code 与属性）。复算接口用**组卷时刻冻结的素材池快照**重放抽题，逐题与指纹比对——素材池事后增删改不影响历史卷面复算。
+- **重合率口径**：两套共享题数 / 单套题量（每套等长）；后套与任一已生成套的最大重合率不得超过阈值（默认 20%）。超阈自动换下一轮种子重抽，每一轮（含被否套）落试抽记录；压不下来的套不收录，批次置 PARTIAL 并提示补素材或放宽阈值。
+- **池不足硬约束**：任一（知识点×难度档）桶可用题 < 需求时，预检逐桶列"需求/可用"，执行**整批拒收、不落半套**（`POOL_INSUFFICIENT`）。
+- **素材增删留痕、历史卷面不受影响**：题目只停用不物理删除；新增/改属性（逐字段前后值）/停用/启用都追加留痕。组卷时把入选题属性与整个可用池快照冻结进卷面/批次，卷面生成即只读；纠错走废弃（留记录、不删除）后另组新卷。
+
+### 41. 素材池（增删留痕，不物理删除）
+
+- `POST /api/pc-materials`、`GET /api/pc-materials?projectCode=&knowledgePoint=&difficulty=&status=&includeDisabled=`：题目（code 全局唯一、知识点、难度档 EASY/MEDIUM/HARD、题型、分值、题干摘要）。
+- `POST /api/pc-materials/{id}/update`：改知识点/难度/题型/分值/摘要，变化字段各写一条 UPDATE 留痕（前后值+原因）。
+- `POST /api/pc-materials/{id}/disable?reason=`、`POST /api/pc-materials/{id}/enable?reason=`：停用后组卷不再抽、历史卷面保留；重新启用可再抽。
+- `GET /api/pc-materials/{id}/changes`：ADD/UPDATE/DISABLE/ENABLE 完整留痕。
+
+### 42. 抽选算法模块（模块 + 版本 + 状态）
+
+- `POST /api/pick-algorithms`、`GET /api/pick-algorithms?projectCode=`、`GET /api/pick-algorithms/{id}`：算法按项目建档（缺省 `DEFAULT`）。
+- `POST /api/pick-algorithms/{id}/versions`：建草稿，参数
+  `{"strategy":"KP_DIFFICULTY_QUOTA","maxOverlapRate":0.20,"tries":200,"allowReplacement":true}`
+  （阈值须在 [0,1]、tries 1~10000，非法整批拒收）；`GET .../versions`、`GET /api/pick-algorithms/versions/{versionId}`。
+- `POST /api/pick-algorithms/versions/{versionId}/publish`（DRAFT→ACTIVE，旧 ACTIVE 自动 DISABLED）、`POST .../disable`（停用版不可再发布，要改新建版本）。
+- 组卷取项目当前 ACTIVE 版本；无生效版用内置默认参数（结果标 `BUILTIN_DEFAULT`）。每套卷面永久记下 `pickVersionNo`，算法以后升级不改变历史卷面口径。
+
+### 43. 多套并行组卷（两步预检；配比、种子、池快照、指纹全冻结）
+
+- `POST /api/paper-compose/preview` → `POST /api/paper-compose`：请求
+  `{"projectCode?","examBatchId?","paperCount":3,"seed":987654321,"maxOverlapRate":0.2,
+    "quotas":[{"knowledgePoint":"法规","difficulty":"EASY","count":5},...]}`。
+  - 预检逐桶列当前"需求/可用"，池不足给可读提示；池够则按**将使用的同一冻结输入**试算（不落库），回可生成套数、最大重合率、试抽次数。
+  - 执行落组卷批次 + 每套卷面 + 卷面题目明细 + 每套指纹 + 全部试抽痕迹；成功回 `COMPOSED`，桶够但重合率压不下来为 `PARTIAL`（已达标套照常落库，缺套待补素材后另组）。
+  - 同一（知识点,难度档）配比不可重复；每套内不重复出题；卷面总分=各题分值合计。
+- `GET /api/paper-compose/batches?projectCode=&examBatchId=`、`GET /api/paper-compose/batches/{id}`（不含池快照大字段）、`GET /api/paper-compose/batches/{id}/papers`、`GET /api/paper-compose/batches/{id}/attempts`（含每轮被否试抽，自动重抽可查）。
+- `GET /api/paper-compose/papers/{id}`：卷面详情（题号、冻结的题目属性、分值、指纹、实际重合率）。
+
+### 44. 卷面指纹备查与公平性复算；卷面只读、废弃留痕
+
+- `GET /api/paper-compose/papers/{id}/verify`：按组卷时刻冻结的池快照+配比+种子重放抽题，回存档指纹、重算指纹、入选题是否逐题一致、`verified` 结论与所用种子/版本/池指纹。
+- `POST /api/paper-compose/papers/{id}/void` `{"reason"}`：卷面只读，纠错只能废弃（ACTIVE→VOID，追加废弃记录，不删除）；重复废弃拒收（`PAPER_ALREADY_VOID`）。废弃后仍可 verify 证明其生成时的公平性。
+- `GET /api/paper-compose/papers/{id}/void-records`：废弃留痕。
+
+> 新表 `t_pc_material / t_pc_material_change / t_pc_pick_algorithm / t_pc_pick_algorithm_version / t_pc_compose_batch / t_pc_paper / t_pc_paper_item / t_pc_paper_void_record / t_pc_compose_attempt` 已纳入工作区快照与回退；schema 版本号 `papercomp-1`。
