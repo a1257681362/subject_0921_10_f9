@@ -369,3 +369,44 @@
 - `GET /api/qualification-appeals?status=&regNo=&personKey=`、`GET /api/qualification-appeals/{id}`、`GET /api/qualification-appeals/{id}/versions`（CREATE/ACCEPT/APPROVE/REJECT 版本链）。
 
 > 新表 `t_condition_rule / t_condition_rule_version / t_registration_qualification / t_qualification_check_item / t_qualification_appeal / t_qualification_appeal_version` 已纳入工作区快照与回退；`t_certificate` 加列 `valid_from/valid_to`（老库平滑加列）；schema 版本号 `regcond-1`。
+
+## 教研组卷抽选工作区（papersel-1）
+
+教研组要求**多场并行、难度均衡、卷面不雷同、且事后能证明公平**。组卷随机种子与卷面指纹保存在 **evops-base**：按**知识点+难度档配比**从素材池随机抽，**套与套重合率压在阈值内、超阈自动换种子重抽**；每套存卷面指纹备查；抽取过程可复算。素材池**增删留记录、只下架不物理删**，历史卷面持有组卷时点快照不受影响。
+
+### 41. 素材池（增删改只留痕、不物理删）
+
+- `POST /api/paper-materials`：建档 `{materialNo?,projectCode?,knowledgePoint,difficulty,content,referenceAnswer?,remark?}`，编号缺省 `SC+yyMMddHHmmss+4位序列`；建档即算内容指纹 `SHA-256(知识点|难度档|题干|参考答案)`。
+- `POST /api/paper-materials/{id}/update`：改内容/归类（空字段不改；参考答案传空串可清空），内容指纹随之重算，**原因必填**。
+- `POST /api/paper-materials/{id}/disable`：下架（原因必填），素材转 `DISABLED`、**不物理删除**，组卷只抽 `ENABLED`；`POST /api/paper-materials/{id}/enable?reason=` 恢复。
+- `GET /api/paper-materials?projectCode=&knowledgePoint=&difficulty=&status=`、`GET /api/paper-materials/{id}`、`GET /api/paper-materials/{id}/changes`：增删改台账（CREATE/UPDATE/DISABLE/ENABLE，前后快照 JSON，只追加）。
+- 历史卷面存的是组卷时点的素材快照（id+编号+知识点+难度档+内容哈希），**池子事后增删改不影响历史卷面复算**；验平时另把清单与当前池子的差异（下架/内容修改条数）作为提示返回。
+
+### 42. 抽选算法模块（模块 + 版本 + 状态）
+
+与混编/等级规则同一套三段式：算法按项目建档，版本 **DRAFT→ACTIVE→DISABLED**，发布即冻结参数 JSON，同模块同时刻仅一版 ACTIVE。
+
+- `POST /api/paper-sel-algorithms`、`GET /api/paper-sel-algorithms?projectCode=`、`GET /api/paper-sel-algorithms/{id}`。
+- `POST /api/paper-sel-algorithms/{id}/versions`：建草稿，参数为
+  `{"strategy":"KP_DIFFICULTY_QUOTA","maxOverlapRate":0.20,"maxRetries":50,"compareScope":"GROUP"}`
+  （重合率须在 [0,1]、重抽上限 0~1000，非法整批拒收）；`GET .../versions`、`GET /api/paper-sel-algorithms/versions/{versionId}`。
+- `POST /api/paper-sel-algorithms/versions/{versionId}/publish`（旧 ACTIVE 自动 DISABLED）、`POST .../disable`。
+- 组卷取项目当前 ACTIVE 版本并把**参数快照**随卷面留档；项目无生效版用内置默认（结果标 `BUILTIN_DEFAULT`，重合率 20%、重抽上限 50）。
+
+### 43. 多场并行组卷（配比抽题、超阈自动重抽、池子不足提示）
+
+- 两步：`POST /api/paper-compose/preview`（不落库）→ `POST /api/paper-compose`（运行记录与各套卷面同一事务落库），请求
+  `{projectCode?,paperCount,groupCode?,rootSeed?,quotas:[{knowledgePoint,difficulty,count},...]}`。
+- 抽题口径：按配比逐档从"知识点+难度档"桶内洗牌取数，随机源仅来自种子；**根种子**显式优先，否则按 项目|套数|配比|池子指纹|历史运行次数 取确定性种子；**各套衍生种子 = 根种子+套号增量+重探次增量**，纯确定性。
+- 多套串行抽选（套 0、套 1…），每抽完一套与此前各套算重合率（重合素材数/单套题量），**任一套与任一此前套超阈即自动换衍生种子重抽**；返回各套 `retries` 与运行记录的 `retrySummary`；重抽达 `maxRetries` 仍压不下返回 `OVERLAP_RETRY_EXHAUSTED`，整批拒收不落库。
+- **池子不足先于抽选逐项报缺口**（`POOL_INSUFFICIENT`：知识点/难度档要多少、在池多少、缺口多少），整批不落库；余量紧张、发生重抽以 `warnings` 提示。
+- 返回每套 `seed（衍生种子）/ selected（中选快照）/ paperFingerprint / overlapMaxRate / overlapDetail / retries`，以及 `rootSeed / poolFingerprint / poolSize`。
+
+### 44. 卷面指纹与事后公平核验
+
+- 卷面指纹 = `SHA-256(算法版本号|根种子|衍生种子|池子指纹|顺序中选素材 编号:内容哈希)`；池子指纹 = 组卷时点在池素材按 id 排序逐条摘要的 SHA-256。卷面、种子、池子任一处被改动都会导致复算不符。
+- `GET /api/paper-compose/runs/{runId}/verify`：用运行记录里**冻结的参数、配比、根种子、池子快照**重新抽一遍，逐套比衍生种子、中选清单、卷面指纹三项，全符才 `fair=true`；快照与库存指纹不符、复算抛错等情况逐条给 `notes`。
+- `GET /api/paper-compose/runs?projectCode=&groupCode=`（列表不带快照大字段）、`GET /api/paper-compose/runs/{runId}`（含配比/参数快照/池子快照/指纹）、`GET /api/paper-compose/runs/{runId}/papers`、`GET /api/paper-compose/papers/{paperId}`。
+- 运行记录与卷面只追加，无修改/删除接口；种子与指纹均在 evops-base 落库可追溯，满足下周教研会过流程与事后验公平。
+
+> 新表 `t_paper_material / t_paper_material_change / t_paper_sel_algorithm / t_paper_sel_algorithm_version / t_paper_sel_run / t_paper_sel_paper` 已纳入工作区快照与回退；schema 版本号 `papersel-1`。

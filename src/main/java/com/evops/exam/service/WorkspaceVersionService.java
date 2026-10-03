@@ -102,6 +102,18 @@ import com.evops.regcond.mapper.RegistrationQualificationMapper;
 import com.evops.regcond.mapper.QualificationCheckItemMapper;
 import com.evops.regcond.mapper.QualificationAppealMapper;
 import com.evops.regcond.mapper.QualificationAppealVersionMapper;
+import com.evops.papersel.entity.PaperMaterial;
+import com.evops.papersel.entity.PaperMaterialChange;
+import com.evops.papersel.entity.PaperSelAlgorithm;
+import com.evops.papersel.entity.PaperSelAlgorithmVersion;
+import com.evops.papersel.entity.PaperSelRun;
+import com.evops.papersel.entity.PaperSelPaper;
+import com.evops.papersel.mapper.PaperMaterialMapper;
+import com.evops.papersel.mapper.PaperMaterialChangeMapper;
+import com.evops.papersel.mapper.PaperSelAlgorithmMapper;
+import com.evops.papersel.mapper.PaperSelAlgorithmVersionMapper;
+import com.evops.papersel.mapper.PaperSelRunMapper;
+import com.evops.papersel.mapper.PaperSelPaperMapper;
 import com.evops.exam.mapper.AdmissionTicketMapper;
 import com.evops.exam.mapper.ExamBatchMapper;
 import com.evops.exam.mapper.ExamRoomMapper;
@@ -187,6 +199,12 @@ public class WorkspaceVersionService {
     private final QualificationCheckItemMapper checkItemMapper;
     private final QualificationAppealMapper appealMapper;
     private final QualificationAppealVersionMapper appealVersionMapper;
+    private final PaperMaterialMapper paperMaterialMapper;
+    private final PaperMaterialChangeMapper paperMaterialChangeMapper;
+    private final PaperSelAlgorithmMapper paperSelAlgorithmMapper;
+    private final PaperSelAlgorithmVersionMapper paperSelVersionMapper;
+    private final PaperSelRunMapper paperSelRunMapper;
+    private final PaperSelPaperMapper paperSelPaperMapper;
     private final ObjectMapper objectMapper;
     private final RestoreMapper restoreMapper;
 
@@ -244,6 +262,12 @@ public class WorkspaceVersionService {
                                    QualificationCheckItemMapper checkItemMapper,
                                    QualificationAppealMapper appealMapper,
                                    QualificationAppealVersionMapper appealVersionMapper,
+                                   PaperMaterialMapper paperMaterialMapper,
+                                   PaperMaterialChangeMapper paperMaterialChangeMapper,
+                                   PaperSelAlgorithmMapper paperSelAlgorithmMapper,
+                                   PaperSelAlgorithmVersionMapper paperSelVersionMapper,
+                                   PaperSelRunMapper paperSelRunMapper,
+                                   PaperSelPaperMapper paperSelPaperMapper,
                                    ObjectMapper objectMapper,
                                    RestoreMapper restoreMapper) {
         this.versionMapper = versionMapper;
@@ -300,6 +324,12 @@ public class WorkspaceVersionService {
         this.checkItemMapper = checkItemMapper;
         this.appealMapper = appealMapper;
         this.appealVersionMapper = appealVersionMapper;
+        this.paperMaterialMapper = paperMaterialMapper;
+        this.paperMaterialChangeMapper = paperMaterialChangeMapper;
+        this.paperSelAlgorithmMapper = paperSelAlgorithmMapper;
+        this.paperSelVersionMapper = paperSelVersionMapper;
+        this.paperSelRunMapper = paperSelRunMapper;
+        this.paperSelPaperMapper = paperSelPaperMapper;
         this.objectMapper = objectMapper;
         this.restoreMapper = restoreMapper;
     }
@@ -462,6 +492,12 @@ public class WorkspaceVersionService {
             data.put("qualificationCheckItems", checkItemMapper.selectList(null));
             data.put("qualificationAppeals", appealMapper.selectList(null));
             data.put("qualificationAppealVersions", appealVersionMapper.selectList(null));
+            data.put("paperMaterials", paperMaterialMapper.selectList(null));
+            data.put("paperMaterialChanges", paperMaterialChangeMapper.selectList(null));
+            data.put("paperSelAlgorithms", paperSelAlgorithmMapper.selectList(null));
+            data.put("paperSelVersions", paperSelVersionMapper.selectList(null));
+            data.put("paperSelRuns", paperSelRunMapper.selectList(null));
+            data.put("paperSelPapers", paperSelPaperMapper.selectList(null));
             return objectMapper.writeValueAsString(data);
         } catch (Exception e) {
             throw new BusinessException("SNAPSHOT_FAILED", "生成工作区快照失败：" + e.getMessage());
@@ -491,6 +527,12 @@ public class WorkspaceVersionService {
         restoreMapper.clearQualifications();
         restoreMapper.clearConditionRuleVersions();
         restoreMapper.clearConditionRules();
+        restoreMapper.clearPaperSelPapers();
+        restoreMapper.clearPaperSelRuns();
+        restoreMapper.clearPaperSelVersions();
+        restoreMapper.clearPaperSelAlgorithms();
+        restoreMapper.clearPaperMaterialChanges();
+        restoreMapper.clearPaperMaterials();
         restoreMapper.clearAbsenceStats();
         restoreMapper.clearScoreSnapshots();
         restoreMapper.clearAbsenceMarkVersions();
@@ -628,6 +670,24 @@ public class WorkspaceVersionService {
         for (QualificationAppealVersion v : nullSafe(data.qualificationAppealVersions)) {
             restoreMapper.insertAppealVersion(v);
         }
+        for (PaperMaterial m : nullSafe(data.paperMaterials)) {
+            restoreMapper.insertPaperMaterial(m);
+        }
+        for (PaperMaterialChange c : nullSafe(data.paperMaterialChanges)) {
+            restoreMapper.insertPaperMaterialChange(c);
+        }
+        for (PaperSelAlgorithm a : nullSafe(data.paperSelAlgorithms)) {
+            restoreMapper.insertPaperSelAlgorithm(a);
+        }
+        for (PaperSelAlgorithmVersion v : nullSafe(data.paperSelVersions)) {
+            restoreMapper.insertPaperSelVersion(v);
+        }
+        for (PaperSelRun r : nullSafe(data.paperSelRuns)) {
+            restoreMapper.insertPaperSelRun(r);
+        }
+        for (PaperSelPaper p : nullSafe(data.paperSelPapers)) {
+            restoreMapper.insertPaperSelPaper(p);
+        }
         for (MixAlgorithm a : nullSafe(data.mixAlgorithms)) {
             restoreMapper.insertMixAlgorithm(a);
         }
@@ -722,6 +782,12 @@ public class WorkspaceVersionService {
         restoreMapper.restartCheckItem(restoreMapper.maxCheckItemId() + 1);
         restoreMapper.restartAppeal(restoreMapper.maxAppealId() + 1);
         restoreMapper.restartAppealVersion(restoreMapper.maxAppealVersionId() + 1);
+        restoreMapper.restartPaperMaterial(restoreMapper.maxPaperMaterialId() + 1);
+        restoreMapper.restartPaperMaterialChange(restoreMapper.maxPaperMaterialChangeId() + 1);
+        restoreMapper.restartPaperSelAlgorithm(restoreMapper.maxPaperSelAlgorithmId() + 1);
+        restoreMapper.restartPaperSelVersion(restoreMapper.maxPaperSelVersionId() + 1);
+        restoreMapper.restartPaperSelRun(restoreMapper.maxPaperSelRunId() + 1);
+        restoreMapper.restartPaperSelPaper(restoreMapper.maxPaperSelPaperId() + 1);
         restoreMapper.restartMixAlgorithm(restoreMapper.maxMixAlgorithmId() + 1);
         restoreMapper.restartMixVersion(restoreMapper.maxMixVersionId() + 1);
         restoreMapper.restartArrangementRun(restoreMapper.maxArrangementRunId() + 1);
@@ -858,5 +924,11 @@ public class WorkspaceVersionService {
         public List<QualificationCheckItem> qualificationCheckItems;
         public List<QualificationAppeal> qualificationAppeals;
         public List<QualificationAppealVersion> qualificationAppealVersions;
+        public List<PaperMaterial> paperMaterials;
+        public List<PaperMaterialChange> paperMaterialChanges;
+        public List<PaperSelAlgorithm> paperSelAlgorithms;
+        public List<PaperSelAlgorithmVersion> paperSelVersions;
+        public List<PaperSelRun> paperSelRuns;
+        public List<PaperSelPaper> paperSelPapers;
     }
 }

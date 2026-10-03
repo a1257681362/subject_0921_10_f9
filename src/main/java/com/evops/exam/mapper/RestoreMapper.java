@@ -52,6 +52,12 @@ import com.evops.regcond.entity.RegistrationQualification;
 import com.evops.regcond.entity.QualificationCheckItem;
 import com.evops.regcond.entity.QualificationAppeal;
 import com.evops.regcond.entity.QualificationAppealVersion;
+import com.evops.papersel.entity.PaperMaterial;
+import com.evops.papersel.entity.PaperMaterialChange;
+import com.evops.papersel.entity.PaperSelAlgorithm;
+import com.evops.papersel.entity.PaperSelAlgorithmVersion;
+import com.evops.papersel.entity.PaperSelRun;
+import com.evops.papersel.entity.PaperSelPaper;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -897,6 +903,92 @@ public interface RestoreMapper {
             + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
     void insertAppealVersion(QualificationAppealVersion v);
 
+    // ---------- papersel-1：教研组卷抽选 ----------
+
+    @Delete("DELETE FROM t_paper_sel_paper")
+    void clearPaperSelPapers();
+
+    @Delete("DELETE FROM t_paper_sel_run")
+    void clearPaperSelRuns();
+
+    @Delete("DELETE FROM t_paper_sel_algorithm_version")
+    void clearPaperSelVersions();
+
+    @Delete("DELETE FROM t_paper_sel_algorithm")
+    void clearPaperSelAlgorithms();
+
+    @Delete("DELETE FROM t_paper_material_change")
+    void clearPaperMaterialChanges();
+
+    @Delete("DELETE FROM t_paper_material")
+    void clearPaperMaterials();
+
+    @Insert("INSERT INTO t_paper_material (id, material_no, project_code, knowledge_point, difficulty, "
+            + "content, reference_answer, content_hash, status, remark, disabled_reason, disabled_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{materialNo},#{projectCode},#{knowledgePoint},#{difficulty},"
+            + "#{content},#{referenceAnswer},#{contentHash},#{status},#{remark},#{disabledReason},#{disabledAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperMaterial(PaperMaterial m);
+
+    @Insert("INSERT INTO t_paper_material_change (id, material_id, material_no, change_type, "
+            + "before_snapshot, after_snapshot, reason, operator, changed_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{materialId},#{materialNo},#{changeType},#{beforeSnapshot},#{afterSnapshot},"
+            + "#{reason},#{operator},#{changedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperMaterialChange(PaperMaterialChange c);
+
+    @Insert("INSERT INTO t_paper_sel_algorithm (id, code, name, project_code, remark, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{code},#{name},#{projectCode},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperSelAlgorithm(PaperSelAlgorithm a);
+
+    @Insert("INSERT INTO t_paper_sel_algorithm_version (id, algorithm_id, version_no, status, params, remark, "
+            + "published_by, published_at, disabled_by, disabled_at, operator, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{algorithmId},#{versionNo},#{status},#{params},#{remark},"
+            + "#{publishedBy},#{publishedAt},#{disabledBy},#{disabledAt},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperSelVersion(PaperSelAlgorithmVersion v);
+
+    @Insert("INSERT INTO t_paper_sel_run (id, run_no, group_code, project_code, paper_count, paper_size, "
+            + "quotas, sel_version_id, sel_version_no, params_snapshot, root_seed, pool_snapshot, "
+            + "pool_fingerprint, max_overlap_rate, retry_summary, warnings, status, operator, executed_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{runNo},#{groupCode},#{projectCode},#{paperCount},#{paperSize},"
+            + "#{quotas},#{selVersionId},#{selVersionNo},#{paramsSnapshot},#{rootSeed},#{poolSnapshot},"
+            + "#{poolFingerprint},#{maxOverlapRate},#{retrySummary},#{warnings},#{status},#{operator},#{executedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperSelRun(PaperSelRun r);
+
+    @Insert("INSERT INTO t_paper_sel_paper (id, run_id, paper_index, paper_no, seed, selected, "
+            + "paper_fingerprint, overlap_max_rate, overlap_detail, retries, executed_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{runId},#{paperIndex},#{paperNo},#{seed},#{selected},"
+            + "#{paperFingerprint},#{overlapMaxRate},#{overlapDetail},#{retries},#{executedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertPaperSelPaper(PaperSelPaper p);
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_material")
+    long maxPaperMaterialId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_material_change")
+    long maxPaperMaterialChangeId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_sel_algorithm")
+    long maxPaperSelAlgorithmId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_sel_algorithm_version")
+    long maxPaperSelVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_sel_run")
+    long maxPaperSelRunId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_sel_paper")
+    long maxPaperSelPaperId();
+
     @Select("SELECT COALESCE(MAX(id),0) FROM t_condition_rule")
     long maxConditionRuleId();
 
@@ -932,4 +1024,22 @@ public interface RestoreMapper {
 
     @Update("ALTER TABLE t_qualification_appeal_version ALTER COLUMN id RESTART WITH ${value}")
     void restartAppealVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_paper_material ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperMaterial(@Param("value") long value);
+
+    @Update("ALTER TABLE t_paper_material_change ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperMaterialChange(@Param("value") long value);
+
+    @Update("ALTER TABLE t_paper_sel_algorithm ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperSelAlgorithm(@Param("value") long value);
+
+    @Update("ALTER TABLE t_paper_sel_algorithm_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperSelVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_paper_sel_run ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperSelRun(@Param("value") long value);
+
+    @Update("ALTER TABLE t_paper_sel_paper ALTER COLUMN id RESTART WITH ${value}")
+    void restartPaperSelPaper(@Param("value") long value);
 }
